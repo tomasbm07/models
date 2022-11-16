@@ -27,7 +27,7 @@ public class Value {
     /*@ pure @*/
     @Override
     public boolean equals(/*@ nullable @*/ Object o) {
-        if (!(o instanceof Value)) {
+        if (!(o instanceof Value)) {  // if (null) is implicit in instanceof
             return false;
         }
         Value other = (Value) o;
