@@ -22,7 +22,7 @@ public class Value {
         return value > 0;
     }
 
-    //@ also ensures (o == null | !(o instanceof Value)) ==> (\result == false);
+    //@ also ensures (o == null || !(o instanceof Value)) ==> (\result == false);
     //@ also ensures (o instanceof Value) ==> (\result == this.value.equals(((Value) o).value));
     /*@ pure @*/
     @Override
