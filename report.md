@@ -37,7 +37,13 @@ Value.java:33: verify: The prover cannot establish an assertion (PossiblyNullIni
 2 verification failures
 ```
 
-To pass all the verification tests, we must ensure the object we are trying to match is not `null`.
+To pass all the verification tests, we must ensure the object we are trying to match is not `null`. We can easily do that with the following code
+
+```java
+if (!(o instanceof Value)) {
+    return false;
+}
+```
 
 ### Exercise 2
 
@@ -66,27 +72,27 @@ To make sure the array is sorted upon exiting, we used the following jml contrac
 
 #### Part 4
 
+- For this part, we tried to put in practice all the theorems demonstrated in the [provided paper of the algorithm](https://arxiv.org/pdf/2110.01111.pdf)
+
 ```java
 public class ICantBeliveItCanSort {
-    /*@
-        requires a != null && a.length > 0;
-        ensures (\forall int i; 0 <= i < a.length - 1; a[i] <= a[i+1]);
-        ensures \ol d(a.length) == a.length; 
-        ensures (\forall int i; 0 <= i < \old(a.length); (\exists int j; 0 <= j < a.length; \old(a[i]) == a[j]));
-    @*/
+    //@ requires a != null && a.length > 0;
+    //@ ensures (\forall int i; 0 <= i < a.length-1; a[i] <= a[i+1]);
+    //@ ensures \old(a.length) == a.length;
+    //@ ensures (\forall int i; 0 <= i < \old(a.length); (\exists int j; 0 <= j && j < a.length; \old(a[i]) == a[j]));
     public static void sort(/*@ non_null @*/ int[] a) {
-        //@ final ghost int n = a.length;
-
-        //@ loop_invariant 0 <= i <= n;
-        //@ decreasing n - i;
+        //@ loop_invariant 0 <= i <= a.length;
+        //@ loop_invariant (\forall int k; i <= k && k < a.length; a[k] >= a[i]);
+        //@ loop_invariant (\forall int p; 0 <= p < i; (\forall int r; p < r < i; a[p] <= a[r]));
+        //@ decreases a.length - i;
         for (int i = 0; i < a.length; i++) {
-
-            //@ loop_invariant 0 <= j <= n;
-            //@ loop_invariant \forall int k; j > i && 0 <= k < i; a[k] <= a[k + 1];
-            //@ decreasing n - j;
+            //@ loop_invariant 0 <= j <= a.length;
+            //@ loop_invariant (\forall int k; 0 <= k && k < j; a[k] >= a[i]);
+            //@ loop_invariant \forall int p; 0 <= p < i; (\forall int r; p < r < i; a[p] <= a[r]);
+            //@ decreases a.length - j;
             for (int j = 0; j < a.length; j++) {
                 if (a[i] < a[j]) {
-                    //@ assert a[i] < a[j];
+                    //@ assert a[j] <= a[i];
                     int tmp = a[i];
                     a[i] = a[j];
                     a[j] = tmp;
@@ -95,4 +101,6 @@ public class ICantBeliveItCanSort {
         }
     }
 }
+
+
 ```
