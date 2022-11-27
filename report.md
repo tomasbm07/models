@@ -43,8 +43,56 @@ To pass all the verification tests, we must ensure the object we are trying to m
 
 #### Part 3
 
-CENAS
+To make sure the array is sorted upon exiting, we used the following jml contract:
+
+```java
+/*@
+    requires a != null && a.length > 0;
+    ensures (\forall int i; 0 <= i < a.length - 1; a[i] <= a[i+1]);
+    ensures \old(a.length) == a.length; 
+    ensures (\forall int i; 0 <= i < \old(a.length); (\exists int j; 0 <= j < a.length; \old(a[i]) == a[j]));
+@*/
+```
+
+##### Pre conditions
+
+- `requires a != null && a.length > 0;` makes sure the given array is not null and it's length isn't 0, as it's not possible to sort an array of length 0
+
+##### Post conditions
+
+- `ensures (\forall int i; 0 <= i < a.length - 1; a[i] <= a[i+1]);` ensures the array is sorted
+- `ensures \old(a.length) == a.length;` ensures the array has the same length after getting sorted
+- `ensures (\forall int i; 0 <= i < \old(a.length); (\exists int j; 0 <= j < a.length; \old(a[i]) == a[j]));` ensures the array is a permutation of the original array and not a different one.
 
 #### Part 4
 
-CENAS
+```java
+public class ICantBeliveItCanSort {
+    /*@
+        requires a != null && a.length > 0;
+        ensures (\forall int i; 0 <= i < a.length - 1; a[i] <= a[i+1]);
+        ensures \ol d(a.length) == a.length; 
+        ensures (\forall int i; 0 <= i < \old(a.length); (\exists int j; 0 <= j < a.length; \old(a[i]) == a[j]));
+    @*/
+    public static void sort(/*@ non_null @*/ int[] a) {
+        //@ final ghost int n = a.length;
+
+        //@ loop_invariant 0 <= i <= n;
+        //@ decreasing n - i;
+        for (int i = 0; i < a.length; i++) {
+
+            //@ loop_invariant 0 <= j <= n;
+            //@ loop_invariant \forall int k; j > i && 0 <= k < i; a[k] <= a[k + 1];
+            //@ decreasing n - j;
+            for (int j = 0; j < a.length; j++) {
+                if (a[i] < a[j]) {
+                    //@ assert a[i] < a[j];
+                    int tmp = a[i];
+                    a[i] = a[j];
+                    a[j] = tmp;
+                }
+            }
+        }
+    }
+}
+```
