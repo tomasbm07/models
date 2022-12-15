@@ -14,14 +14,27 @@ proctype Sensors() {
 }
 
 proctype RoadsideUnit() {
+  // update sem1, sem2 and sem3 according to s0, s1, s2 and s3
   do
-  :: // update sem1, sem2 and sem3 according to s0, s1, s2 and s3
+  :: skip;
+    if
+    :: s0 -> printf("Car at Z0\n"); // car at Z0
+    :: s1 -> printf("Car at Z1\n"); // car at Z1
+    :: s2 -> printf("Car at Z2\n"); // car at Z2
+    :: s3 -> printf("Car at Z3\n"); // car at Z3
+    fi;
   od;
 }
 
 proctype Vehicles() {
+  // non-deterministically move vehicles through zones Z0, Z1, Z2, and Z3
   do
-  :: // non-deterministically move vehicles through zones Z0, Z1, Z2, and Z3
+  :: (countZ1 + countZ2 + countZ3) >= 1 -> break; // limit max number of cars
+  :: if
+    :: true -> countZ1++;
+    :: true -> countZ2++;
+    :: true -> countZ3++;
+    fi;
   od;
 }
 
