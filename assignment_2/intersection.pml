@@ -7,9 +7,12 @@ mtype sem1 = red, sem2 = red, sem3 = red;    // three semaphores
 bool  s0, s1, s2, s3;                        // four presence sensors
 byte  countZ0, countZ1, countZ2, countZ3;    // count the vehicles in each zone
 
+short mutex = 1; // Z0 mutex
+
 proctype Check(){
   do
   :: assert (countZ0 <= 1 && countZ0 >= 0);
+  :: assert (0 <= mutex <= 1);
   od;
 }
 
@@ -43,7 +46,6 @@ inline updateSem(mutex, sem){
 
 proctype RoadsideUnit() {
   // update sem1, sem2 and sem3 according to s0, s1, s2 and s3
-  short mutex = 1;
   do
     :: s1 -> updateSem(mutex, sem1);
     :: s2 -> updateSem(mutex, sem2);
