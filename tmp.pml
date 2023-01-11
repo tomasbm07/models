@@ -1,0 +1,239 @@
+/*
+Intersection includes Zone 0 (shared) and three directions Z1, Z2, Z3
+Respective sensors S0, S1, S2, S3 show if vehicles are in any of the zones
+Traffic lights light1, light2, light3 can be red/green
+Can't "check" vehicle count, access is only binary using sensors
+
+MODEL IS ONLY CORRECT UNDER WEAK FAIRNESS DUE TO INFINITE LOOPS.
+*/
+
+// After 100 "ticks", force the light to continue round robin
+#define ROUND_ROBIN_MAX (100)
+
+// Count of directions
+#define DIRECTIONS (3)
+
+// Amount of incoming cars
+#define INCOMING_CAR_COUNT (7)
+
+// Can't be more than X vehicles in the intersection (Z0)
+#define MAX_VEHICLES_INTERSECTION (3)
+
+#define SENSOR_COUNT (4)
+
+// inline wait_clear(){
+//     /* Wait until Z0 is clear */
+// }
+mtype = { red , green }
+
+// three traffic lights
+mtype light1 = green , light2 = red , light3 = red ; 
+
+// four presence sensors
+bool sensor0 = false , sensor1 = false , sensor2 = false , sensor3 = false ;
+
+// count the vehicles in each zone
+byte countZ0 = 0, countZ1 = 0, countZ2 = 0, countZ3 = 0;
+
+// Directions vehicles are currently coming from
+byte current_direction = 1;
+
+// Direction change request event/flag
+bool change_request = false;
+byte next_direction = 1;  // [1..DIRECTIONS]
+
+// All vehicles were dispatched.
+bool dispatch_ended = false;
+
+#define simulation_ended ( \
+    dispatch_ended && ((countZ0 | countZ1 | countZ2 | countZ3) == 0))
+
+/*********** Sensor Control ***********/
+// bitwise sensor (first bit (LSB) == sensor0, second bit == sensor1, ...)
+byte bitwise_sensor = 0;
+// bitwise flags stating which sensors have been checked since last reset
+byte sensors_checked = 0;
+
+inline reset_sensor_check() {
+    sensors_checked = 0
+}
+#define wait_all_sensors (sensors_checked == ((1<<SENSOR_COUNT)-1))
+#define wait_sensor(num) (sensors_checked & (1 << num))
+inline set_sensor_checked(num) {
+    sensors_checked = sensors_checked | (1 << num);
+}
+
+#define get_sensor(num) ((bitwise_sensor & (1 << num)) != 0)
+
+inline set_bitwise_sensor(num, state) {
+    bitwise_sensor = ( 
+        state -> (bitwise_sensor | 1 << num) : (bitwise_sensor & ~(1<<num)))
+}
+
+proctype Sensors () {
+do
+:: atomic{
+    sensor0 = ( countZ0 > 0)
+    set_bitwise_sensor(0, sensor0)
+    };
+    set_sensor_checked(0);
+:: atomic{
+    sensor1 = ( countZ1 > 0)
+    set_bitwise_sensor(1, sensor1)
+    };
+    set_sensor_checked(1);
+:: atomic{
+    sensor2 = ( countZ2 > 0)
+    set_bitwise_sensor(2, sensor2)
+    };
+    set_sensor_checked(2);
+:: atomic{
+    sensor3 = ( countZ3 > 0)
+    set_bitwise_sensor(3, sensor3)
+    };
+    set_sensor_checked(3);
+:: (simulation_ended) -> break  // Requires weak fairness
+od ;
+}
+
+
+
+// Check if the lights should switch
+// Implements round robin mechanism to avoid starvation
+proctype CheckLightSwitch () {
+    byte counter = 0;
+    // Simple Goto Loop
+    start_lightswitch: skip
+    counter++;
+    if
+    :: (counter >= ROUND_ROBIN_MAX) ->
+        counter = 0
+        if
+        // If there are no vehicles in any other direction sensor (except
+        // Z0), keep the current direction
+        :: (!(bitwise_sensor & (~(1<<current_direction | 1)))) ->
+            goto start_lightswitch
+        :: else -> skip
+        fi;
+        // Time to request a direction switch
+        next_direction = current_direction;
+        byte i;
+        // Round robin the directions
+        for (i : 1 .. DIRECTIONS-1) {
+            next_direction = (next_direction % DIRECTIONS) + 1
+            if
+            // We found a direction where the sensor is active
+            :: get_sensor(next_direction) -> break
+            :: else -> skip
+            fi;
+        }
+        // Request the direction switch
+        change_request = true;
+        // Wait until the direction was changed
+        (!change_request)
+    :: else -> skip
+    fi;
+
+    // Check if the simulation has ended
+    if
+    :: (!simulation_ended) -> goto start_lightswitch
+    :: else -> skip
+    fi;
+}
+
+
+proctype RoadsideUnit () {
+    // Simple Goto loop
+    start_rsu: skip
+    if
+    :: (change_request) -> skip
+        printf("Direction change request: %d -> %d", current_direction, next_direction)
+        // Turn off the old light
+        if
+        :: (current_direction == 1) -> light1 = red
+        :: (current_direction == 2) -> light2 = red
+        :: (current_direction == 3) -> light3 = red
+        fi;
+        printf("Turned %d to red\n", current_direction)
+        reset_sensor_check()
+        wait_sensor(0)  // Wait until Z0 is clear
+        printf("Turned %d to green\n", next_direction)
+        // Change the light
+        if
+        :: (next_direction == 1) -> light1 = green
+        :: (next_direction == 2) -> light2 = green
+        :: (next_direction == 3) -> light3 = green
+        fi;
+
+        // Update the current direction
+        current_direction = next_direction;
+        // Reset the change request
+        change_request = false;
+        goto start_rsu
+    // Check if simulation has ended
+    :: (simulation_ended) -> skip
+    fi;
+}
+
+// Vehicles are moving according to traffic lights
+proctype VehicleMovement () {
+    // Simple Goto loop
+start_movement: skip
+    if
+    // Intersection is full, vehicle is leaving.
+    :: (countZ0 == MAX_VEHICLES_INTERSECTION) ->
+        printf("Intersection is full, vehicle leaving intersection\n")
+        countZ0--;
+    :: else -> skip
+        if
+        :: (light1 && countZ1) -> atomic{
+            printf("Light 1 is green and there are %d cars in Z1\n", countZ1)
+            countZ1--
+            countZ0++
+            printf("Car moved. Z1: %d (-1), Z0: %d (+1)\n", countZ1, countZ0)
+        }
+        :: (light2 && countZ2) -> atomic{
+            printf("Light 2 is green and there are %d cars in Z2\n", countZ2)
+            countZ2--
+            countZ0++
+            printf("Car moved. Z2: %d (-1), Z0: %d (+1)\n", countZ2, countZ0)
+        }
+        :: (light3 && countZ3) -> atomic{
+            printf("Light 3 is green and there are %d cars in Z3\n", countZ3)
+            countZ3--
+            countZ0++
+            printf("Car moved. Z3: %d (-1), Z0: %d (+1)\n", countZ3, countZ0)
+        }
+        :: countZ0 -> countZ0--
+        :: simulation_ended -> goto end_movement;
+        fi;
+        (!countZ0 || sensor0)  // Wait for sensor to activate before dispatching
+        goto start_movement
+    fi;
+end_movement: skip
+}
+
+proctype IncomingVehicles () {
+    // Vehicles are non-deterministically, asynchronously, entering the zones.
+    byte i;
+    for (i : 1 .. INCOMING_CAR_COUNT) {
+        if
+        :: true -> printf("Adding car to Z1\n")
+            countZ1++
+        :: true -> printf("Adding car to Z2\n")
+            countZ2++
+        :: true -> printf("Adding car to Z3\n")
+            countZ3++
+        fi;
+    }
+    dispatch_ended = true;
+}
+
+init {
+    printf("Starting with traffic light 1 as green.\n")
+    run IncomingVehicles ();
+    run Sensors ();
+    run RoadsideUnit ();
+    run CheckLightSwitch ();
+    run VehicleMovement ();
+}
