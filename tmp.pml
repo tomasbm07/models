@@ -27,7 +27,7 @@ MODEL IS ONLY CORRECT UNDER WEAK FAIRNESS DUE TO INFINITE LOOPS.
 mtype = { red , green }
 
 // three traffic lights
-mtype light1 = green , light2 = red , light3 = red ; 
+mtype light1 = red , light2 = red , light3 = red ; 
 
 // four presence sensors
 bool sensor0 = false , sensor1 = false , sensor2 = false , sensor3 = false ;
@@ -56,7 +56,7 @@ byte sensors_checked = 0;
 inline reset_sensor_check() {
     sensors_checked = 0
 }
-#define wait_all_sensors (sensors_checked == ((1<<SENSOR_COUNT)-1))
+#define wait_all_sensors (sensors_checked == ((1 << SENSOR_COUNT) - 1))
 #define wait_sensor(num) (sensors_checked & (1 << num))
 inline set_sensor_checked(num) {
     sensors_checked = sensors_checked | (1 << num);
@@ -66,43 +66,45 @@ inline set_sensor_checked(num) {
 
 inline set_bitwise_sensor(num, state) {
     bitwise_sensor = ( 
-        state -> (bitwise_sensor | 1 << num) : (bitwise_sensor & ~(1<<num)))
+        state -> (bitwise_sensor | 1 << num) : (bitwise_sensor & ~(1 << num)))
 }
 
 proctype Sensors () {
 do
 :: atomic{
-    sensor0 = ( countZ0 > 0)
-    set_bitwise_sensor(0, sensor0)
+        sensor0 = ( countZ0 > 0)
+        set_bitwise_sensor(0, sensor0)
     };
     set_sensor_checked(0);
     if
     :: simulation_ended -> break;
     :: else -> skip
     fi;
-:: atomic{
-    sensor1 = ( countZ1 > 0)
-    set_bitwise_sensor(1, sensor1)
+:: atomic {
+        sensor1 = ( countZ1 > 0)
+        set_bitwise_sensor(1, sensor1)
     };
     set_sensor_checked(1);
     if
     :: simulation_ended -> break;
     :: else -> skip
     fi;
-:: atomic{
-    sensor2 = ( countZ2 > 0)
-    set_bitwise_sensor(2, sensor2)
+:: atomic {
+        sensor2 = ( countZ2 > 0)
+        set_bitwise_sensor(2, sensor2)
     };
     set_sensor_checked(2);
     if
     :: simulation_ended -> break;
     :: else -> skip
     fi;
-:: atomic{
-    sensor3 = ( countZ3 > 0)
-    set_bitwise_sensor(3, sensor3)
+:: atomic {
+        sensor3 = (countZ3 > 0)
+        set_bitwise_sensor(3, sensor3)
     };
+    
     set_sensor_checked(3);
+    
     if
     :: simulation_ended -> break;
     :: else -> skip
@@ -133,7 +135,7 @@ proctype CheckLightSwitch () {
         next_direction = current_direction;
         byte i;
         // Round robin the directions
-        for (i : 1 .. DIRECTIONS-1) {
+        for (i : 1 .. DIRECTIONS - 1) {
             next_direction = (next_direction % DIRECTIONS) + 1
             if
             // We found a direction where the sensor is active
@@ -199,7 +201,7 @@ start_movement: skip
     :: (countZ0 == MAX_VEHICLES_INTERSECTION) ->
         printf("Intersection is full, vehicle leaving intersection\n")
         countZ0--;
-    :: else -> atomic{
+    :: else -> atomic {
         if
         :: (light1 == green && countZ1) -> 
             printf("Light 1 is green and there are %d cars in Z1\n", countZ1)
@@ -224,6 +226,7 @@ start_movement: skip
         //(!countZ0 || sensor0)  // Wait for sensor to activate before dispatching
     fi;
     goto start_movement
+
 end_movement: skip
     printf("\n\n\n\nVehicle Movement Simulation ended.\n")
 }
@@ -233,19 +236,21 @@ proctype IncomingVehicles () {
     byte i;
     for (i : 1 .. INCOMING_CAR_COUNT) {
         if
-        :: true -> printf("Adding car to Z1\n")
-            countZ1++
-        :: true -> printf("Adding car to Z2\n")
-            countZ2++
-        :: true -> printf("Adding car to Z3\n")
-            countZ3++
+        :: true -> printf("Adding car to Z1\n"); countZ1++;
+        :: true -> printf("Adding car to Z2\n"); countZ2++;
+        :: true -> printf("Adding car to Z3\n"); countZ3++;
         fi;
     }
     dispatch_ended = true;
 }
 
 init {
-    printf("Starting with traffic light 1 as green.\n")
+    if
+    :: light1 = green; printf("Starting with traffic light 1 as green.\n");
+    :: light2 = green; printf("Starting with traffic light 2 as green.\n");
+    :: light3 = green; printf("Starting with traffic light 3 as green.\n");
+    fi;
+
     run IncomingVehicles ();
     run Sensors ();
     run RoadsideUnit ();
