@@ -14,12 +14,18 @@ MODEL IS ONLY CORRECT UNDER WEAK FAIRNESS DUE TO INFINITE LOOPS.
 #define DIRECTIONS (3)
 
 // Amount of incoming cars
-#define INCOMING_CAR_COUNT (2)
+#define INCOMING_CAR_COUNT (5)
 
 // Can't be more than X vehicles in the intersection (Z0)
-#define MAX_VEHICLES_INTERSECTION (1)
+#define MAX_VEHICLES_INTERSECTION (3)
 
 #define SENSOR_COUNT (4)
+
+// Add vehicles asynchronously (true) or synchronously (false)
+// Asynchronous is more realistic, and allows vehicles to enter in the middle
+// of the simulation, but is considerably slower as the decision tree
+// is much larger.
+#define ADD_VEHICLES_ASYNCHRONOUSLY (true)
 
 // three traffic lights
 mtype = {red, green}
@@ -180,7 +186,7 @@ proctype RoadsideUnit () {
         :: (next_direction == 3) -> light3 = green
         fi;
 
-        // Assert that only one light is on, at a time
+        // Assert that only one light is on, at a time  // TODO: CHANGE TO AN LTL
         assert((check_light(light1) || check_light(light2) || check_light(light3)) && !(check_light(light1) && check_light(light2) &&  check_light(light3)))
 
         // Update the current direction
@@ -202,6 +208,10 @@ start_movement: skip
     :: (countZ0 == MAX_VEHICLES_INTERSECTION) ->
         printf("Intersection is full, vehicle leaving intersection\n")
         countZ0--;
+    
+    // Make sure that reducing a counter and increasing Z0 is atomic
+    // otherwise vehicles can disappear :-(
+    // Writing the atomic here as I don't wish to repeat it everywhere (DRY)
     :: else -> atomic {
             if
             :: (light1 == green && countZ1) -> 
@@ -219,17 +229,16 @@ start_movement: skip
                 countZ3--
                 countZ0++
                 printf("Car moved. Z3: %d (-1), Z0: %d (+1)\n", countZ3, countZ0)
-            // :: countZ0 -> countZ0--
-            //     printf("Car left Z0: %d (-1)\n", countZ0)
-            :: simulation_ended -> goto end_movement;
+            :: countZ0 -> countZ0--
+                printf("Car left Z0: %d (-1)\n", countZ0)
+            :: simulation_ended -> goto vehcile_movement_end;
             fi;
         }
     fi;
     
-    assert (countZ0 == 0 || countZ0 == 1)
     goto start_movement
 
-end_movement: skip
+vehcile_movement_end: skip
     printf("\n\n\n\nVehicle Movement Simulation ended.\n")
 }
 
@@ -247,6 +256,13 @@ proctype IncomingVehicles () {
 }
 
 init {
+    // Make sure we can reach the max
+    assert(INCOMING_CAR_COUNT>=MAX_VEHICLES_INTERSECTION);
+
+    // Make sure that the code relevant for decreasing Z0 is reachable
+    assert(MAX_VEHICLES_INTERSECTION>1)
+
+    // Reduce the decision tree a little, no need for a random initial direction
     if
     :: light1 = green; printf("Starting with traffic light 1 as green.\n");
     // :: light2 = green; printf("Starting with traffic light 2 as green.\n");
@@ -254,6 +270,13 @@ init {
     fi;
 
     run IncomingVehicles ();
+    
+    if
+    :: ADD_VEHICLES_ASYNCHRONOUSLY -> skip
+    // Wait until the vehicles are added (join IncomingVehicles)
+    :: else -> (_nr_pr == 1);
+    fi;
+
     run Sensors ();
     run RoadsideUnit ();
     run CheckLightSwitch ();
