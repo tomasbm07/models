@@ -14,19 +14,15 @@ MODEL IS ONLY CORRECT UNDER WEAK FAIRNESS DUE TO INFINITE LOOPS.
 #define DIRECTIONS (3)
 
 // Amount of incoming cars
-#define INCOMING_CAR_COUNT (5)
+#define INCOMING_CAR_COUNT (2)
 
 // Can't be more than X vehicles in the intersection (Z0)
-#define MAX_VEHICLES_INTERSECTION (3)
+#define MAX_VEHICLES_INTERSECTION (1)
 
 #define SENSOR_COUNT (4)
 
-// inline wait_clear(){
-//     /* Wait until Z0 is clear */
-// }
-mtype = { red , green }
-
 // three traffic lights
+mtype = {red, green}
 mtype light1 = red , light2 = red , light3 = red ; 
 
 // four presence sensors
@@ -68,6 +64,8 @@ inline set_bitwise_sensor(num, state) {
     bitwise_sensor = ( 
         state -> (bitwise_sensor | 1 << num) : (bitwise_sensor & ~(1 << num)))
 }
+
+#define check_light(light) (light == green)
 
 proctype Sensors () {
 do
@@ -126,7 +124,7 @@ proctype CheckLightSwitch () {
         counter = 0
         // Wait until there are vehicles in any other direction sensor (except
         // Z0) or the simulation has ended, keep the current direction
-        ((bitwise_sensor & (~((1<<current_direction) | 1))) || simulation_ended)
+        ((bitwise_sensor & (~(( 1 << current_direction) | 1))) || simulation_ended)
         if
         :: (simulation_ended) -> goto lightswitch_loop_end
         :: else -> skip;
@@ -182,6 +180,9 @@ proctype RoadsideUnit () {
         :: (next_direction == 3) -> light3 = green
         fi;
 
+        // Assert that only one light is on, at a time
+        assert((check_light(light1) || check_light(light2) || check_light(light3)) && !(check_light(light1) && check_light(light2) &&  check_light(light3)))
+
         // Update the current direction
         current_direction = next_direction;
         // Reset the change request
@@ -202,29 +203,30 @@ start_movement: skip
         printf("Intersection is full, vehicle leaving intersection\n")
         countZ0--;
     :: else -> atomic {
-        if
-        :: (light1 == green && countZ1) -> 
-            printf("Light 1 is green and there are %d cars in Z1\n", countZ1)
-            countZ1--
-            countZ0++
-            printf("Car moved. Z1: %d (-1), Z0: %d (+1)\n", countZ1, countZ0)
-        :: (light2 == green && countZ2) ->
-            printf("Light 2 is green and there are %d cars in Z2\n", countZ2)
-            countZ2--
-            countZ0++
-            printf("Car moved. Z2: %d (-1), Z0: %d (+1)\n", countZ2, countZ0)
-        :: (light3 == green && countZ3) ->
-            printf("Light 3 is green and there are %d cars in Z3\n", countZ3)
-            countZ3--
-            countZ0++
-            printf("Car moved. Z3: %d (-1), Z0: %d (+1)\n", countZ3, countZ0)
-        :: countZ0 -> countZ0--
-            printf("Car left Z0: %d (-1)\n", countZ0)
-        :: simulation_ended -> goto end_movement;
-        fi;
+            if
+            :: (light1 == green && countZ1) -> 
+                printf("Light 1 is green and there are %d cars in Z1\n", countZ1)
+                countZ1--
+                countZ0++
+                printf("Car moved. Z1: %d (-1), Z0: %d (+1)\n", countZ1, countZ0)
+            :: (light2 == green && countZ2) ->
+                printf("Light 2 is green and there are %d cars in Z2\n", countZ2)
+                countZ2--
+                countZ0++
+                printf("Car moved. Z2: %d (-1), Z0: %d (+1)\n", countZ2, countZ0)
+            :: (light3 == green && countZ3) ->
+                printf("Light 3 is green and there are %d cars in Z3\n", countZ3)
+                countZ3--
+                countZ0++
+                printf("Car moved. Z3: %d (-1), Z0: %d (+1)\n", countZ3, countZ0)
+            // :: countZ0 -> countZ0--
+            //     printf("Car left Z0: %d (-1)\n", countZ0)
+            :: simulation_ended -> goto end_movement;
+            fi;
         }
-        //(!countZ0 || sensor0)  // Wait for sensor to activate before dispatching
     fi;
+    
+    assert (countZ0 == 0 || countZ0 == 1)
     goto start_movement
 
 end_movement: skip
@@ -247,8 +249,8 @@ proctype IncomingVehicles () {
 init {
     if
     :: light1 = green; printf("Starting with traffic light 1 as green.\n");
-    :: light2 = green; printf("Starting with traffic light 2 as green.\n");
-    :: light3 = green; printf("Starting with traffic light 3 as green.\n");
+    // :: light2 = green; printf("Starting with traffic light 2 as green.\n");
+    // :: light3 = green; printf("Starting with traffic light 3 as green.\n");
     fi;
 
     run IncomingVehicles ();
