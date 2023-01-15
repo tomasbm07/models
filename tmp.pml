@@ -254,6 +254,13 @@ proctype IncomingVehicles () {
     }
     dispatch_ended = true;
 }
+  
+
+ltl mutual_exclusion_lights { 
+    []((light1 == green) -> (light2 == red && light3 == red)) 
+    && []((light2 == green) -> (light1 == red && light3 == red)) 
+    && []((light3 == green) -> (light2 == red && light1 == red)) 
+} 
 
 init {
     // Make sure we can reach the max
