@@ -178,7 +178,7 @@ proctype RoadsideUnit () {
         printf("Turned %d to red\n", current_direction)
         reset_sensor_check()
         (wait_sensor(0) || simulation_ended)  // Wait until Z0 is clear or sim ended
-        (sensor0 == false)
+        (sensor0 == false || simulation_ended)
         assert (countZ0 == 0)
         printf("Turned %d to green\n", next_direction)
         // Change the light
@@ -188,8 +188,6 @@ proctype RoadsideUnit () {
         :: (next_direction == 3) -> light3 = green
         fi;
 
-        // Assert that only one light is on, at a time  // TODO: CHANGE TO AN LTL
-        assert((check_light(light1) || check_light(light2) || check_light(light3)) && !(check_light(light1) && check_light(light2) &&  check_light(light3)))
 
         // Update the current direction
         current_direction = next_direction;
@@ -260,29 +258,27 @@ proctype IncomingVehicles () {
 }
   
 
-// ltl ltl_1 {
-//     // Only one light can be green at a time
-//     []((light1 == green) -> (light2 == red && light3 == red)) 
-//     && []((light2 == green) -> (light1 == red && light3 == red)) 
-//     && []((light3 == green) -> (light2 == red && light1 == red)) 
-// } 
+ltl ltl_1 {
+    // Only one light can be green at a time
+    []((light1 == green) -> (light2 == red && light3 == red)) 
+    && []((light2 == green) -> (light1 == red && light3 == red)) 
+    && []((light3 == green) -> (light2 == red && light1 == red)) 
+} 
 
-// ltl ltl_2 {
-//     // If cars in zone1, eventually light1 is green
-//     (
-//         (
-//             ((countZ1) -> <>(light1 == green)) &&
-//             ((countZ2) -> <>(light2 == green)) &&
-//             ((countZ3) -> <>(light3 == green))
-//         )
-//     ) U (dispatch_ended && (countZ0==0 && countZ1==0 && countZ2==0 && countZ3==0))
-    
-// } 
+ltl ltl_2 {
+    // If cars in zone1, eventually light1 is green
+    (<>[] !np_) -> ( (
+        (
+            ((countZ1) -> <>(light1 == green)) &&
+            ((countZ2) -> <>(light2 == green)) &&
+            ((countZ3) -> <>(light3 == green))
+        )
+    ) U (dispatch_ended && (countZ0==0 && countZ1==0 && countZ2==0 && countZ3==0)))    
+ } 
 
 ltl ltl_3 {
     // If cars in zone1, light1 stays green, before moving to other zones
 
-    // countZ1 -> <>(light1==green W !countZ1)
     (<>[] !np_) -> [](
         (countZ1 && !countZ2 && !countZ3 && dispatch_ended) -> <>[](light1==green) && 
         (!countZ1 && countZ2 && !countZ3 && dispatch_ended) -> <>[](light2==green) &&
