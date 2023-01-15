@@ -78,8 +78,8 @@ do
 :: atomic{
         sensor0 = ( countZ0 > 0)
         set_bitwise_sensor(0, sensor0)
+        set_sensor_checked(0);
     };
-    set_sensor_checked(0);
     if
     :: simulation_ended -> break;
     :: else -> skip
@@ -178,6 +178,8 @@ proctype RoadsideUnit () {
         printf("Turned %d to red\n", current_direction)
         reset_sensor_check()
         (wait_sensor(0) || simulation_ended)  // Wait until Z0 is clear or sim ended
+        (sensor0 == false)
+        assert (countZ0 == 0)
         printf("Turned %d to green\n", next_direction)
         // Change the light
         if
