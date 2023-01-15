@@ -59,7 +59,7 @@ inline reset_sensor_check() {
     sensors_checked = 0
 }
 #define wait_all_sensors (sensors_checked == ((1 << SENSOR_COUNT) - 1))
-#define wait_sensor(num) (sensors_checked & (1 << num))
+#define wait_sensor_checked(num) (sensors_checked & (1 << num))
 inline set_sensor_checked(num) {
     sensors_checked = sensors_checked | (1 << num);
 }
@@ -75,11 +75,11 @@ inline set_bitwise_sensor(num, state) {
 
 proctype Sensors () {
 do
-:: atomic{
+:: atomic {
         sensor0 = ( countZ0 > 0)
         set_bitwise_sensor(0, sensor0)
+        set_sensor_checked(0);
     };
-    set_sensor_checked(0);
     if
     :: simulation_ended -> break;
     :: else -> skip
@@ -87,8 +87,8 @@ do
 :: atomic {
         sensor1 = ( countZ1 > 0)
         set_bitwise_sensor(1, sensor1)
+        set_sensor_checked(1);
     };
-    set_sensor_checked(1);
     if
     :: simulation_ended -> break;
     :: else -> skip
@@ -96,8 +96,8 @@ do
 :: atomic {
         sensor2 = ( countZ2 > 0)
         set_bitwise_sensor(2, sensor2)
+        set_sensor_checked(2);
     };
-    set_sensor_checked(2);
     if
     :: simulation_ended -> break;
     :: else -> skip
@@ -105,10 +105,8 @@ do
 :: atomic {
         sensor3 = (countZ3 > 0)
         set_bitwise_sensor(3, sensor3)
-    };
-    
-    set_sensor_checked(3);
-    
+        set_sensor_checked(3);
+    };    
     if
     :: simulation_ended -> break;
     :: else -> skip
@@ -177,17 +175,15 @@ proctype RoadsideUnit () {
         fi;
         printf("Turned %d to red\n", current_direction)
         reset_sensor_check()
-        (wait_sensor(0) || simulation_ended)  // Wait until Z0 is clear or sim ended
-        printf("Turned %d to green\n", next_direction)
+         // Wait until Z0 is clear or sim ended
+        ((wait_sensor_checked(0) && !sensor0) || simulation_ended) 
+        assert(countZ0 == 0)
         // Change the light
         if
         :: (next_direction == 1) -> light1 = green
-        :: (next_direction == 2) -> light2 = green
+        :: (next_direction == 2) -> light2 = red
         :: (next_direction == 3) -> light3 = green
         fi;
-
-        // Assert that only one light is on, at a time  // TODO: CHANGE TO AN LTL
-        assert((check_light(light1) || check_light(light2) || check_light(light3)) && !(check_light(light1) && check_light(light2) &&  check_light(light3)))
 
         // Update the current direction
         current_direction = next_direction;
@@ -215,20 +211,24 @@ start_movement: skip
     // otherwise vehicles can disappear :-(
     // Writing the atomic here as I don't wish to repeat it everywhere (DRY)
     :: else -> atomic {
+
             if
             :: (light1 == green && countZ1) -> 
                 printf("Light 1 is green and there are %d cars in Z1\n", countZ1)
                 countZ1--
+                printf("Finished movement\n")
                 countZ0++
                 printf("Car moved. Z1: %d (-1), Z0: %d (+1)\n", countZ1, countZ0)
             :: (light2 == green && countZ2) ->
                 printf("Light 2 is green and there are %d cars in Z2\n", countZ2)
                 countZ2--
+                printf("Finished movement\n")
                 countZ0++
                 printf("Car moved. Z2: %d (-1), Z0: %d (+1)\n", countZ2, countZ0)
             :: (light3 == green && countZ3) ->
                 printf("Light 3 is green and there are %d cars in Z3\n", countZ3)
                 countZ3--
+                printf("Finished movement\n")
                 countZ0++
                 printf("Car moved. Z3: %d (-1), Z0: %d (+1)\n", countZ3, countZ0)
             :: countZ0 -> countZ0--
@@ -265,28 +265,28 @@ proctype IncomingVehicles () {
 //     && []((light3 == green) -> (light2 == red && light1 == red)) 
 // } 
 
-// ltl ltl_2 {
-//     // If cars in zone1, eventually light1 is green
-//     (
-//         (
-//             ((countZ1) -> <>(light1 == green)) &&
-//             ((countZ2) -> <>(light2 == green)) &&
-//             ((countZ3) -> <>(light3 == green))
-//         )
-//     ) U (dispatch_ended && (countZ0==0 && countZ1==0 && countZ2==0 && countZ3==0))
+ltl ltl_2 {
+    // If cars in zone1, eventually light1 is green
+    (<>[] !np_) -> ((
+        (
+            ((countZ1) -> <>(light1 == green)) &&
+            ((countZ2) -> <>(light2 == green)) &&
+            ((countZ3) -> <>(light3 == green))
+        )
+    ) U (dispatch_ended && (countZ0==0 && countZ1==0 && countZ2==0 && countZ3==0)))
     
-// } 
+} 
 
-ltl ltl_3 {
-    // If cars in zone1, light1 stays green, before moving to other zones
+// ltl ltl_3 {
+//     // If cars in zone1, light1 stays green, before moving to other zones
 
-    // countZ1 -> <>(light1==green W !countZ1)
-    (<>[] !np_) -> [](
-        (countZ1 && !countZ2 && !countZ3 && dispatch_ended) -> <>[](light1==green) && 
-        (!countZ1 && countZ2 && !countZ3 && dispatch_ended) -> <>[](light2==green) &&
-        (!countZ1 && !countZ2 && countZ3 && dispatch_ended) -> <>[](light3==green)
-    )
-}
+//     // countZ1 -> <>(light1==green W !countZ1)
+//     (<>[] !np_) -> [](
+//         (countZ1 && !countZ2 && !countZ3 && dispatch_ended) -> <>[](light1==green) && 
+//         (!countZ1 && countZ2 && !countZ3 && dispatch_ended) -> <>[](light2==green) &&
+//         (!countZ1 && !countZ2 && countZ3 && dispatch_ended) -> <>[](light3==green)
+//     )
+// }
 
 init {
     // Make sure we can reach the max
