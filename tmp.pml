@@ -14,10 +14,10 @@ MODEL IS ONLY CORRECT UNDER WEAK FAIRNESS DUE TO INFINITE LOOPS.
 #define DIRECTIONS (3)
 
 // Amount of incoming cars
-#define INCOMING_CAR_COUNT (5)
+#define INCOMING_CAR_COUNT (3)
 
 // Can't be more than X vehicles in the intersection (Z0)
-#define MAX_VEHICLES_INTERSECTION (3)
+#define MAX_VEHICLES_INTERSECTION (2)
 
 #define SENSOR_COUNT (4)
 
@@ -203,6 +203,8 @@ proctype RoadsideUnit () {
 proctype VehicleMovement () {
     // Simple Goto loop
 start_movement: skip
+    
+    progress: skip
     if
     // Intersection is full, vehicle is leaving.
     :: (countZ0 == MAX_VEHICLES_INTERSECTION) ->
@@ -256,11 +258,35 @@ proctype IncomingVehicles () {
 }
   
 
-ltl mutual_exclusion_lights { 
-    []((light1 == green) -> (light2 == red && light3 == red)) 
-    && []((light2 == green) -> (light1 == red && light3 == red)) 
-    && []((light3 == green) -> (light2 == red && light1 == red)) 
-} 
+// ltl ltl_1 {
+//     // Only one light can be green at a time
+//     []((light1 == green) -> (light2 == red && light3 == red)) 
+//     && []((light2 == green) -> (light1 == red && light3 == red)) 
+//     && []((light3 == green) -> (light2 == red && light1 == red)) 
+// } 
+
+// ltl ltl_2 {
+//     // If cars in zone1, eventually light1 is green
+//     (
+//         (
+//             ((countZ1) -> <>(light1 == green)) &&
+//             ((countZ2) -> <>(light2 == green)) &&
+//             ((countZ3) -> <>(light3 == green))
+//         )
+//     ) U (dispatch_ended && (countZ0==0 && countZ1==0 && countZ2==0 && countZ3==0))
+    
+// } 
+
+ltl ltl_3 {
+    // If cars in zone1, light1 stays green, before moving to other zones
+
+    // countZ1 -> <>(light1==green W !countZ1)
+    (<>[] !np_) -> [](
+        (countZ1 && !countZ2 && !countZ3 && dispatch_ended) -> <>[](light1==green) && 
+        (!countZ1 && countZ2 && !countZ3 && dispatch_ended) -> <>[](light2==green) &&
+        (!countZ1 && !countZ2 && countZ3 && dispatch_ended) -> <>[](light3==green)
+    )
+}
 
 init {
     // Make sure we can reach the max
@@ -268,6 +294,9 @@ init {
 
     // Make sure that the code relevant for decreasing Z0 is reachable
     assert(MAX_VEHICLES_INTERSECTION>1)
+    
+    // Make sure there is always at least one car
+    assert(INCOMING_CAR_COUNT > 0)
 
     // Reduce the decision tree a little, no need for a random initial direction
     if
@@ -278,6 +307,7 @@ init {
 
     run IncomingVehicles ();
     
+    // Add cars asynchronously or not
     if
     :: ADD_VEHICLES_ASYNCHRONOUSLY -> skip
     // Wait until the vehicles are added (join IncomingVehicles)
